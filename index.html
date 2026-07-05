@@ -18,25 +18,27 @@
             padding: 20px;
             box-sizing: border-box;
         }
-        h2 {
+        h2 { margin-bottom: 20px; }
+        .btn-container {
+            display: flex;
+            gap: 10px;
             margin-bottom: 20px;
         }
-        .upload-btn {
+        .btn {
             padding: 12px 24px;
-            background-color: #007aff;
             color: white;
             border-radius: 8px;
             cursor: pointer;
             font-weight: bold;
-            margin-bottom: 20px;
-            transition: background 0.2s;
+            border: none;
+            font-size: 16px;
         }
-        .upload-btn:active {
-            background-color: #0051a8;
+        .upload-btn { background-color: #007aff; }
+        .fullscreen-btn { 
+            background-color: #34c759; 
+            display: none; /* 有影片時才顯示 */
         }
-        input[type="file"] {
-            display: none;
-        }
+        input[type="file"] { display: none; }
         video {
             width: 100%;
             max-width: 600px;
@@ -50,29 +52,42 @@
 
     <h2>本地影片播放器</h2>
     
-    <label class="upload-btn" for="video-chooser">選擇手機裡的影片</label>
-    <input type="file" id="video-chooser" accept="video/*">
+    <div class="btn-container">
+        <label class="btn upload-btn" for="video-chooser">選擇手機裡的影片</label>
+        <input type="file" id="video-chooser" accept="video/*">
+        <button id="fullscreen-btn" class="btn fullscreen-btn">進入全螢幕</button>
+    </div>
 
-    <video id="video-player" controls playsinline></video>
+    <video id="video-player" controls></video>
 
     <script>
         const videoChooser = document.getElementById('video-chooser');
         const videoPlayer = document.getElementById('video-player');
+        const fullscreenBtn = document.getElementById('fullscreen-btn');
 
         videoChooser.addEventListener('change', function(event) {
             const file = event.target.files[0];
-            
             if (file) {
-                // 建立一個指向手機本地檔案的暫時 URL
                 const fileURL = URL.createObjectURL(file);
-                
                 videoPlayer.src = fileURL;
                 videoPlayer.style.display = 'block';
+                fullscreenBtn.style.display = 'inline-block'; // 顯示全螢幕按鈕
                 
-                // 自動嘗試播放（部分 iOS 版本可能會因為安全機制需要手動點擊播放）
-                videoPlayer.play().catch(error => {
-                    console.log("預期行為：等待使用者手動點擊播放。");
-                });
+                videoPlayer.play().catch(err => console.log("等待手動播放"));
+            }
+        });
+
+        // 點擊自訂按鈕觸發全螢幕
+        fullscreenBtn.addEventListener('click', function() {
+            if (videoPlayer.requestFullscreen) {
+                videoPlayer.requestFullscreen();
+            } else if (videoPlayer.webkitEnterFullscreen) {
+                // iOS Safari 專用的全螢幕方法
+                videoPlayer.webkitEnterFullscreen();
+            } else if (videoPlayer.mozRequestFullScreen) {
+                videoPlayer.mozRequestFullScreen();
+            } else if (videoPlayer.msRequestFullscreen) {
+                videoPlayer.msRequestFullscreen();
             }
         });
     </script>
