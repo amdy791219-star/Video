@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>手機影片播放器</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        h2 {
+            margin-bottom: 20px;
+        }
+        .upload-btn {
+            padding: 12px 24px;
+            background-color: #007aff;
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-bottom: 20px;
+            transition: background 0.2s;
+        }
+        .upload-btn:active {
+            background-color: #0051a8;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        video {
+            width: 100%;
+            max-width: 600px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>本地影片播放器</h2>
+    
+    <label class="upload-btn" for="video-chooser">選擇手機裡的影片</label>
+    <input type="file" id="video-chooser" accept="video/*">
+
+    <video id="video-player" controls playsinline></video>
+
+    <script>
+        const videoChooser = document.getElementById('video-chooser');
+        const videoPlayer = document.getElementById('video-player');
+
+        videoChooser.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            
+            if (file) {
+                // 建立一個指向手機本地檔案的暫時 URL
+                const fileURL = URL.createObjectURL(file);
+                
+                videoPlayer.src = fileURL;
+                videoPlayer.style.display = 'block';
+                
+                // 自動嘗試播放（部分 iOS 版本可能會因為安全機制需要手動點擊播放）
+                videoPlayer.play().catch(error => {
+                    console.log("預期行為：等待使用者手動點擊播放。");
+                });
+            }
+        });
+    </script>
+</body>
+</html>
