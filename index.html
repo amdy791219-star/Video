@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>手機影片播放器</title>
+    <title>高效能影片播放器</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -21,41 +21,47 @@
         h2 { margin-bottom: 20px; }
         .btn-container {
             display: flex;
+            flex-wrap: wrap;
             gap: 10px;
             margin-bottom: 20px;
+            justify-content: center;
         }
         .btn {
-            padding: 12px 24px;
+            padding: 12px 20px;
             color: white;
             border-radius: 8px;
             cursor: pointer;
             font-weight: bold;
             border: none;
-            font-size: 16px;
+            font-size: 15px;
+            transition: background 0.2s;
         }
         .upload-btn { background-color: #007aff; }
-        .fullscreen-btn { 
-            background-color: #34c759; 
-            display: none; /* 有影片時才顯示 */
-        }
+        .fullscreen-btn { background-color: #34c759; display: none; }
+        .clear-btn { background-color: #ff3b30; display: none; }
+        
         input[type="file"] { display: none; }
+        
         video {
             width: 100%;
             max-width: 600px;
             border-radius: 12px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.5);
             display: none;
+            margin-top: 10px;
         }
     </style>
 </head>
 <body>
 
-    <h2>本地影片播放器</h2>
+    <h2>本地影片播放器 (記憶體優化版)</h2>
     
     <div class="btn-container">
-        <label class="btn upload-btn" for="video-chooser">選擇手機裡的影片</label>
+        <label class="btn upload-btn" for="video-chooser">選擇手機影片</label>
         <input type="file" id="video-chooser" accept="video/*">
+        
         <button id="fullscreen-btn" class="btn fullscreen-btn">進入全螢幕</button>
+        <button id="clear-btn" class="btn clear-btn">看完清空(釋放容量)</button>
     </div>
 
     <video id="video-player" controls></video>
@@ -64,31 +70,73 @@
         const videoChooser = document.getElementById('video-chooser');
         const videoPlayer = document.getElementById('video-player');
         const fullscreenBtn = document.getElementById('fullscreen-btn');
+        const clearBtn = document.getElementById('clear-btn');
 
+        // 核心：釋放記憶體與快取的函數
+        function releaseVideoMemory() {
+            if (videoPlayer.src) {
+                // 1. 停止影片播放
+                videoPlayer.pause();
+                
+                // 2. 獲取當前的 Blob URL
+                const currentSrc = videoPlayer.src;
+                
+                // 3. 將播放器清空，斷開與檔案的連結
+                videoPlayer.removeAttribute('src');
+                videoPlayer.load(); 
+                
+                // 4. 強制銷毀該 URL 在 RAM 中的快取指標
+                if (currentSrc.startsWith('blob:')) {
+                    URL.revokeObjectURL(currentSrc);
+                    console.log('【系統】已成功主動釋放快取記憶體：', currentSrc);
+                }
+            }
+        }
+
+        // 當使用者選擇影片時
         videoChooser.addEventListener('change', function(event) {
             const file = event.target.files[0];
+            
             if (file) {
+                // 先執行釋放：確保上一支看過的影片不會殘留記憶體
+                releaseVideoMemory();
+                
+                // 建立新的暫時 URL
                 const fileURL = URL.createObjectURL(file);
+                
+                // 掛載新影片並顯示元件
                 videoPlayer.src = fileURL;
                 videoPlayer.style.display = 'block';
-                fullscreenBtn.style.display = 'inline-block'; // 顯示全螢幕按鈕
+                fullscreenBtn.style.display = 'inline-block';
+                clearBtn.style.display = 'inline-block';
                 
-                videoPlayer.play().catch(err => console.log("等待手動播放"));
+                // 嘗試播放
+                videoPlayer.play().catch(err => console.log("等待手動點擊播放"));
             }
         });
 
-        // 點擊自訂按鈕觸發全螢幕
+        // 點擊「進入全螢幕」按鈕
         fullscreenBtn.addEventListener('click', function() {
-            if (videoPlayer.requestFullscreen) {
-                videoPlayer.requestFullscreen();
-            } else if (videoPlayer.webkitEnterFullscreen) {
-                // iOS Safari 專用的全螢幕方法
+            if (videoPlayer.webkitEnterFullscreen) {
+                // iOS Safari 專用強行全螢幕 API
                 videoPlayer.webkitEnterFullscreen();
-            } else if (videoPlayer.mozRequestFullScreen) {
-                videoPlayer.mozRequestFullScreen();
-            } else if (videoPlayer.msRequestFullscreen) {
-                videoPlayer.msRequestFullscreen();
+            } else if (videoPlayer.requestFullscreen) {
+                videoPlayer.requestFullscreen();
             }
+        });
+
+        // 點擊「看完清空」按鈕
+        clearBtn.addEventListener('click', function() {
+            // 執行釋放
+            releaseVideoMemory();
+            
+            // 隱藏播放器與按鈕，回復初始狀態
+            videoPlayer.style.display = 'none';
+            fullscreenBtn.style.display = 'none';
+            clearBtn.style.display = 'none';
+            videoChooser.value = ''; // 重置輸入框
+            
+            alert('記憶體與快取已主動釋放！');
         });
     </script>
 </body>
