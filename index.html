@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>高效能影片播放器 (修正版)</title>
+    <title>高效能影片播放器 (長影片優化版)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -54,7 +54,7 @@
 </head>
 <body>
 
-    <h2>本地影片播放器 (Safari 優化版)</h2>
+    <h2>本地影片播放器 (長影片流暢優化版)</h2>
     
     <div class="btn-container">
         <label class="btn upload-btn" for="video-chooser">選擇手機影片</label>
@@ -64,7 +64,8 @@
         <button id="clear-btn" class="btn clear-btn">看完清空(釋放容量)</button>
     </div>
 
-    <video id="video-player" controls playsinline preload="metadata"></video>
+    <!-- 優化：預設 preload="none"，防止長影片一開始就塞滿瀏覽器記憶體快取 -->
+    <video id="video-player" controls playsinline preload="none"></video>
 
     <script>
         const videoChooser = document.getElementById('video-chooser');
@@ -73,23 +74,23 @@
         const clearBtn = document.getElementById('clear-btn');
         let currentObjectURL = null;
 
-        // 核心：徹底釋放記憶體
+        // 核心：徹底釋放記憶體與影片 Buffer
         function releaseVideoMemory() {
             if (videoPlayer) {
                 videoPlayer.pause();
                 
-                // 1. 強制撤銷 Blob URL，這步最關鍵
+                // 1. 強制撤銷 Blob URL
                 if (currentObjectURL) {
                     URL.revokeObjectURL(currentObjectURL);
                     currentObjectURL = null;
                     console.log('【系統】Blob URL 已銷毀');
                 }
                 
-                // 2. 徹底清空 video 標籤的來源，強迫 Safari 釋放 Buffer
+                // 2. 徹底清空影片來源，強迫 Safari 釋放記憶體與緩衝區
                 videoPlayer.src = ''; 
                 videoPlayer.removeAttribute('src');
                 
-                // 3. 重新載入空內容，清空底層解碼器記憶體
+                // 3. 重新載入空內容，清空底層解碼器
                 videoPlayer.load(); 
             }
         }
@@ -99,35 +100,36 @@
             const file = event.target.files[0];
             
             if (file) {
-                // 先清理舊的
+                // 先清理舊的記憶體
                 releaseVideoMemory();
                 
-                // 檢查檔案大小，如果是大檔案（例如大於 500MB），給予提示
-                if (file.size > 500 * 1024 * 1024) {
-                    console.warn("偵測到大檔案，Safari 處理可能會較慢");
-                }
-                
-                // 建立新的 URL
+                // 建立新的 Blob URL
                 currentObjectURL = URL.createObjectURL(file);
                 
-                // 掛載新影片
+                // 優化長影片載入策略
+                videoPlayer.preload = "none"; // 避免貪婪預載 3 小時內容
                 videoPlayer.src = currentObjectURL;
+                
                 videoPlayer.style.display = 'block';
                 fullscreenBtn.style.display = 'inline-block';
                 clearBtn.style.display = 'inline-block';
                 
-                // 讓影片準備就緒
-                videoPlayer.load();
-                
-                // 嘗試播放
-                videoPlayer.play().catch(err => console.log("等待手動點擊播放"));
+                // 嘗試播放，並捕捉非同步播放錯誤
+                videoPlayer.play().catch(err => {
+                    console.log("等待使用者手動點擊播放");
+                });
             }
+        });
+
+        // 針對長影片的緩衝警告機制 (避免記憶體崩潰)
+        videoPlayer.addEventListener('waiting', () => {
+            console.warn('【提示】緩衝區讀取中，長影片快取壓迫中，請稍候...');
         });
 
         // 點擊「進入全螢幕」
         fullscreenBtn.addEventListener('click', function() {
             if (videoPlayer.webkitEnterFullscreen) {
-                videoPlayer.webkitEnterFullscreen();
+                videoPlayer.webkitEnterFullscreen(); // 相容 Safari/iOS
             } else if (videoPlayer.requestFullscreen) {
                 videoPlayer.requestFullscreen();
             }
@@ -142,10 +144,10 @@
             clearBtn.style.display = 'none';
             videoChooser.value = ''; 
             
-            alert('快取與影片解碼記憶體已徹底釋放！');
+            alert('記憶體與影片快取已完全清理！');
         });
 
-        // 額外保險：當分頁關閉或重新整理時，強制釋放
+        // 當分頁關閉或重新整理時，強制釋放
         window.addEventListener('beforeunload', releaseVideoMemory);
     </script>
 </body>
