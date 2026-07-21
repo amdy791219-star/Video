@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>高效能影片播放器 (長影片優化版)</title>
+    <title>超大影片播放器 (2.45G+ 拖動進度條修正版)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -18,7 +18,8 @@
             padding: 20px;
             box-sizing: border-box;
         }
-        h2 { margin-bottom: 20px; }
+        h2 { margin-bottom: 10px; text-align: center; }
+        .sub-title { font-size: 13px; color: #aaa; margin-bottom: 20px; text-align: center; }
         .btn-container {
             display: flex;
             flex-wrap: wrap;
@@ -50,86 +51,103 @@
             display: none;
             margin-top: 10px;
         }
+
+        #loading-msg {
+            display: none;
+            color: #ffd60a;
+            font-size: 14px;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
 
-    <h2>本地影片播放器 (長影片流暢優化版)</h2>
+    <h2>本地大檔案播放器 (2.45GB 優化版)</h2>
+    <div class="sub-title">已加入長影片 Fast-Seek 與記憶體緩衝優化</div>
     
     <div class="btn-container">
-        <label class="btn upload-btn" for="video-chooser">選擇手機影片</label>
+        <label class="btn upload-btn" for="video-chooser">選擇大容量影片</label>
         <input type="file" id="video-chooser" accept="video/*">
         
         <button id="fullscreen-btn" class="btn fullscreen-btn">進入全螢幕</button>
         <button id="clear-btn" class="btn clear-btn">看完清空(釋放容量)</button>
     </div>
 
-    <!-- 優化：預設 preload="none"，防止長影片一開始就塞滿瀏覽器記憶體快取 -->
-    <video id="video-player" controls playsinline preload="none"></video>
+    <div id="loading-msg">正在為超大影片建立緩衝索引，請稍候...</div>
+    <video id="video-player" controls playsinline preload="metadata"></video>
 
     <script>
         const videoChooser = document.getElementById('video-chooser');
         const videoPlayer = document.getElementById('video-player');
         const fullscreenBtn = document.getElementById('fullscreen-btn');
         const clearBtn = document.getElementById('clear-btn');
+        const loadingMsg = document.getElementById('loading-msg');
+        
         let currentObjectURL = null;
+        let isSeeking = false;
 
-        // 核心：徹底釋放記憶體與影片 Buffer
+        // 清理記憶體
         function releaseVideoMemory() {
             if (videoPlayer) {
                 videoPlayer.pause();
                 
-                // 1. 強制撤銷 Blob URL
                 if (currentObjectURL) {
                     URL.revokeObjectURL(currentObjectURL);
                     currentObjectURL = null;
-                    console.log('【系統】Blob URL 已銷毀');
                 }
                 
-                // 2. 徹底清空影片來源，強迫 Safari 釋放記憶體與緩衝區
                 videoPlayer.src = ''; 
                 videoPlayer.removeAttribute('src');
-                
-                // 3. 重新載入空內容，清空底層解碼器
                 videoPlayer.load(); 
             }
         }
 
-        // 當使用者選擇影片時
         videoChooser.addEventListener('change', function(event) {
             const file = event.target.files[0];
             
             if (file) {
-                // 先清理舊的記憶體
                 releaseVideoMemory();
+                loadingMsg.style.display = 'block';
                 
-                // 建立新的 Blob URL
+                // 針對 2.45G 這種超大檔案使用特殊載入流程
+                currentObjectURL = URL.revokeObjectURL(file); // 確保釋放舊的
                 currentObjectURL = URL.createObjectURL(file);
                 
-                // 優化長影片載入策略
-                videoPlayer.preload = "none"; // 避免貪婪預載 3 小時內容
+                // preload="metadata" 讓瀏覽器只讀取頭部的時間長度，不要一次載滿全檔
+                videoPlayer.preload = "metadata";
                 videoPlayer.src = currentObjectURL;
                 
                 videoPlayer.style.display = 'block';
                 fullscreenBtn.style.display = 'inline-block';
                 clearBtn.style.display = 'inline-block';
                 
-                // 嘗試播放，並捕捉非同步播放錯誤
-                videoPlayer.play().catch(err => {
-                    console.log("等待使用者手動點擊播放");
-                });
+                videoPlayer.onloadedmetadata = function() {
+                    loadingMsg.style.display = 'none';
+                    console.log("元數據載入成功，影片時長：", videoPlayer.duration);
+                };
             }
         });
 
-        // 針對長影片的緩衝警告機制 (避免記憶體崩潰)
-        videoPlayer.addEventListener('waiting', () => {
-            console.warn('【提示】緩衝區讀取中，長影片快取壓迫中，請稍候...');
+        // 解決「拉進度條卡死」的核心優化：
+        // 當使用者開始拖拖動進度條 (seeking) 時，暫停影片避免緩衝區衝突
+        videoPlayer.addEventListener('seeking', () => {
+            if (!isSeeking) {
+                isSeeking = true;
+                loadingMsg.innerText = "正在拉取對應時間點畫面...";
+                loadingMsg.style.display = 'block';
+            }
+        });
+
+        // 拖放完成 (seeked) 後再恢復
+        videoPlayer.addEventListener('seeked', () => {
+            isSeeking = false;
+            loadingMsg.style.display = 'none';
         });
 
         // 點擊「進入全螢幕」
         fullscreenBtn.addEventListener('click', function() {
             if (videoPlayer.webkitEnterFullscreen) {
-                videoPlayer.webkitEnterFullscreen(); // 相容 Safari/iOS
+                videoPlayer.webkitEnterFullscreen();
             } else if (videoPlayer.requestFullscreen) {
                 videoPlayer.requestFullscreen();
             }
@@ -138,16 +156,14 @@
         // 點擊「看完清空」
         clearBtn.addEventListener('click', function() {
             releaseVideoMemory();
-            
             videoPlayer.style.display = 'none';
             fullscreenBtn.style.display = 'none';
             clearBtn.style.display = 'none';
+            loadingMsg.style.display = 'none';
             videoChooser.value = ''; 
-            
-            alert('記憶體與影片快取已完全清理！');
+            alert('記憶體與快取已徹底釋放！');
         });
 
-        // 當分頁關閉或重新整理時，強制釋放
         window.addEventListener('beforeunload', releaseVideoMemory);
     </script>
 </body>
